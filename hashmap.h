@@ -13,12 +13,12 @@ typedef struct HashTable {
     int count;           // Current number of items
 } HashTable_t;
 
-unsigned char hash(char* value);
+void hash(char* value, unsigned char* digest);
 
-bool set(char* key, char* val);
+bool ht_set(char* key, char* val, HashTable_t* table);
 
-char* get(char* key);
+char* ht_get(char* key, HashTable_t* table);
 
-bool remove(char* key);
+bool ht_remove(char* key);
 
-bool expand()
+bool ht_expand(HashTable_t* t);
