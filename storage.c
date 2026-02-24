@@ -5,14 +5,45 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <stdint.h>
 #include "message.h"
 #include "socket.h"
 #include "storage.h"
 #include "hashmap.h"
+#include "unistd.h"
 
-char **parseRequest(char *)
+#define NUM_S_NODES 2
+
+HashTable_t storage_table;
+int thisNodesID;
+int next_node;
+unsigned short storageNodes[NUM_S_NODES] = {8080, 8081};
+int nextNodeFD = -1;
+
+
+void parseRequest(char *message, char args[3][256])
 {
-    "{action}:{key}:{value?}" return NULL;
+    // "{action}:{key}:{value?}" 
+    char* token = strtok(message, ":");
+    int i = 0;
+    while (token != NULL){
+        strcpy(args[i],token);
+        i++;
+        token = strtok(NULL, ":");
+    }
+}
+
+// use hashed key
+bool isKeyInMyRange(char* key){
+    uint64_t hashedint = hash(key);
+
+    /* If the least significant bit is a one, it belongs with the one node, etc...*/
+    if ((hashedint & 1) == thisNodesID) {
+        return true;
+    }
+    return false;
+    
 }
 
 void *listenerThread(void *args)
@@ -33,16 +64,33 @@ void *listenerThread(void *args)
         }
 
         //
-        char **args = parseRequest(message);
+        char args[3][256];
+        parseRequest(message, args);
 
         // check if key is in our range if not send to next
         char *key = args[1];
-        int hash = ? ? ;
-        bool inRange = isKeyInMyHash(hash);
-        if (!inRange)
+        if (!isKeyInMyRange(key))
         {
-            // TODO: Forward message to next storage node
-            // then wait for responce, return to requester
+            // forward message to next storage node
+            int rc = send_message(nextNodeFD, message);
+            if (rc == -1){
+                perror("Node Forwarding Failed.");
+                exit(EXIT_FAILURE);
+            }
+
+            // wait for next sorage node to respond
+            char* response = receive_message(nextNodeFD);
+            if (response == NULL){
+                perror("Node Forward Met No Response.");
+                exit(EXIT_FAILURE);
+            }
+
+            // return response to client
+            rc = send_message(client_socket_fd, response);
+            if (rc == -1){
+                perror("Failed To Return Response To Client.");
+                exit(EXIT_FAILURE);
+            }
             continue;
         }
 
@@ -51,16 +99,24 @@ void *listenerThread(void *args)
         if (strcmp(action, "get") == 0)
         {
             // get
-            char *value = get(key);
+            char *value = ht_get(key, &storage_table);
             // TODO: handle if we dont have key
+            if(value == NULL){
+                value = "Key Not Set.\n";
+            }
             // send message back to requester
+            int rc = send_message(client_socket_fd, value);
+            if (rc == -1){
+                perror("Failed To Return Response To Client.");
+                exit(EXIT_FAILURE);
+            }
+
         }
         else if (strcmp(action, "set") == 0)
         {
             // set
             char *value = args[2];
-            bool success = set(key, value);
-            // send message back to requester
+            ht_set(key, value, &storage_table);
         }
     }
     // close client socket
@@ -70,27 +126,47 @@ void *listenerThread(void *args)
 
 void attachNewStorageNode(char *nodeHashId, char *nodeAddress);
 
-// use hashed key
-bool isHashInMyRange(int hash);
+void *connectToStorageNode(void * args){
+    
+    unsigned short next_port = storageNodes[next_node];
+    do
+    {
+        nextNodeFD = socket_connect("localhost", next_port);
+        printf("Attempted Connection.\n");
+        sleep(2);
 
-bool set(char *key, char *value);
+    } while (nextNodeFD == -1);
+    printf("Connection Established!\n");
+    return NULL;
+}
 
-bool get(char *key);
-
-int main()
+int main(int argc, char* argv[])
 {
-    HashTable_t storage_table;
+    if (argc < 2){
+        perror("args: <int NodeID>");
+        exit(EXIT_FAILURE);
+    }
+    thisNodesID = atoi(argv[1]);
+    next_node = (thisNodesID + 1) % NUM_S_NODES;
+
+    // create hash table
     storage_table.items = malloc(sizeof(HT_Chain_t) * 2048);
     storage_table.size = 2048;
     storage_table.count = 0;
+
+
     // Open a server socket
-    unsigned short port = 0;
+    unsigned short port = storageNodes[thisNodesID];
     int server_socket_fd = server_socket_open(&port);
     if (server_socket_fd == -1)
     {
         perror("Server socket was not opened");
         exit(EXIT_FAILURE);
     }
+
+    // create thread to connect to prev node
+    pthread_t NodeConnect;
+    pthread_create(&NodeConnect, NULL, connectToStorageNode, NULL);
 
     bool running = true;
     while (running)

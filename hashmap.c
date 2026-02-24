@@ -3,9 +3,21 @@
 #include <string.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <openssl/sha.h>
+#include <stdlib.h>
 
 // Citation: https://www.algolist.net/Data_structures/Hash_table/Chaining, to remind
 // how hash tables work
+
+uint64_t hash(char* value) {
+    unsigned char digest[SHA_DIGEST_LENGTH];
+
+    // Obtain 8 bytes that we can actually deal with
+    hash_helper(value, digest);
+    uint64_t hashedint;
+    memcpy(&hashedint, digest, 8);
+    return hashedint;
+}
 
 /**
  * Hash a string using sha1.
@@ -13,10 +25,10 @@
  * @param value The value to be hashed
  * @param digest The array to store the hashed value.
  */
-void hash(char *value, unsigned char *digest)
+void hash_helper(char *value, unsigned char *digest)
 {
     size_t length = strlen(value);
-    SHA1(value, length, digest);
+    SHA1((const unsigned char *)value, length, digest);
 }
 
 /**
@@ -27,16 +39,9 @@ void hash(char *value, unsigned char *digest)
  *
  * @returns a boolean indicating if it was successful
  */
-bool ht_set(char *key, char *val, HashTable_t *table)
+void ht_set(char *key, char *val, HashTable_t *table)
 {
-    unsigned char digest[SHA_DIGEST_LENGTH];
-
-    // Obtain 8 bytes that we can actually deal with
-    hash(key, digest);
-    uint64_t hashedint;
-    memcpy(&hashedint, digest, 8);
-    
-
+    uint64_t hashedint = hash(key);
     hashedint = hashedint % table->size;
 
     HT_Chain_t *cur = table->items[hashedint];
@@ -61,7 +66,7 @@ bool ht_set(char *key, char *val, HashTable_t *table)
             {
                 free(cur->value);
                 cur->value = strdup(val);
-                return true;
+                return;
             }
             cur = cur->next;
         }
@@ -69,7 +74,7 @@ bool ht_set(char *key, char *val, HashTable_t *table)
         {
             free(cur->value);
             cur->value = strdup(val);
-            return true;
+            return;
         }
         // We've reached the end of the chain and need to add onto it
         HT_Chain_t *new = malloc(sizeof(HT_Chain_t));
@@ -83,7 +88,7 @@ bool ht_set(char *key, char *val, HashTable_t *table)
     {
         ht_expand(table);
     }
-    return true;
+    return;
 }
 
 /**
@@ -95,21 +100,15 @@ bool ht_set(char *key, char *val, HashTable_t *table)
  */
 char *ht_get(char *key, HashTable_t* table)
 {
-    unsigned char digest[SHA_DIGEST_LENGTH];
-    char* ret;
-
-    hash(key, digest);
-    uint64_t hashedint;
-    memcpy(&hashedint, digest, 8);
+    uint64_t hashedint = hash(key);
     
-
     hashedint = hashedint % table->size;
 
     HT_Chain_t *cur = table->items[hashedint];
 
     while (cur != NULL) {
         if (strcmp(key, cur->key) == 0) {
-            ret = strdup(cur->value);
+            char* ret = strdup(cur->value);
             return ret;
         } 
         cur = cur->next;      
@@ -117,7 +116,34 @@ char *ht_get(char *key, HashTable_t* table)
     return NULL;
 }
 
-bool ht_remove(char* key, HashTable_t* table) {
+/**
+ * Double the size of a hashtable when it gets too large
+ * 
+ * @param t The hashtable to expand
+ * 
+ */
+void ht_expand(HashTable_t* t) {
+    int prevSize = t->size;
+    t->size *= 2;
+    HT_Chain_t** items = t->items;
+    t->items = malloc(sizeof(HT_Chain_t*) * t->size);
+
+    /* Copy the items over from our original array to their new hashed position*/
+    for(int i = 0; i < prevSize; i++) {
+        HT_Chain_t* cur = items[i];
+
+        while (cur != NULL) {
+            /* Put the value in our new table*/
+            ht_set(cur->key, cur->value, t);
+            HT_Chain_t* next = cur->next;
+
+            /* Free the item while we're at it*/
+            free(cur);
+            cur = next;
+        }
+    }
+
+    free(items);
 
 }
 

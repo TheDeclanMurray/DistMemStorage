@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef struct HT_Chain {
     char* key;
@@ -13,12 +14,14 @@ typedef struct HashTable {
     int count;           // Current number of items
 } HashTable_t;
 
-void hash(char* value, unsigned char* digest);
+uint64_t hash(char* val);
 
-bool ht_set(char* key, char* val, HashTable_t* table);
+void hash_helper(char* value, unsigned char* digest);
+
+void ht_set(char* key, char* val, HashTable_t* table);
 
 char* ht_get(char* key, HashTable_t* table);
 
 bool ht_remove(char* key);
 
-bool ht_expand(HashTable_t* t);
+void ht_expand(HashTable_t* t);
