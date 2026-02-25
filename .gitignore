@@ -56,3 +56,5 @@ dkms.conf
 
 storage
 client
+test
+.vscode/

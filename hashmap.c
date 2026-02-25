@@ -1,4 +1,3 @@
-#pragma once
 #include "hashmap.h"
 #include <ctype.h>
 #include <string.h>

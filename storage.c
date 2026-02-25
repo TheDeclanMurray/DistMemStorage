@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include "message.h"
 #include "socket.h"
-#include "storage.h"
 #include "hashmap.h"
 #include "unistd.h"
 
