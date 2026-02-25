@@ -11,12 +11,13 @@ The program can be run by the following set of commands:
 
 ```
 make
-./runStorage.sh
-./client 8080
+./runStorage.sh  # in one terminal
+./client 8080    # in second terminal
 
 # For testing
-make test
-./test 8080
+make
+./runStorage.sh   # in one terminal
+./test 8080       # in second terminal
 ```
 
 Requests should be written of the form:
