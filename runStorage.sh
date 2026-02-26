@@ -11,7 +11,6 @@ echo "Ports cleared and waited for socket release"
 # Double-check ports are free
 if lsof -i :8080-8081 2>/dev/null | grep -q LISTEN; then
     echo "WARNING: Ports still in use, force-killing again..."
-    sudo fuser -k 8080/tcp 8081/tcp 2>/dev/null
     sleep 2
 fi
 

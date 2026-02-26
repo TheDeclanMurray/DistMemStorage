@@ -1,9 +1,34 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "message.h"
+#include <string.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include "string.h"
+#include <unistd.h> 
+#include "socket.h"
+
+
+#define MAX_MESSAGE_SIZE 256
+
+void parseRequest(char *message, char args[3][256])
+{
+    // "{action}:{key}:{value?}" 
+    char* token = strtok(message, ":");
+    int i = 0;
+    while (token != NULL){
+        strcpy(args[i],token);
+        i++;
+        token = strtok(NULL, ":");
+    }
+}
+
 
 int main(int argc, char** argv) {
     if (argc != 2) {
-        perror("Wrong number of args\n");
+        perror("Usage: <storage port>\n");
         exit(EXIT_FAILURE);
     }
 
@@ -18,21 +43,67 @@ int main(int argc, char** argv) {
     }
 
     /* Placeholder: take in user input*/
-    char* request;
+    int rc;
+    char request[MAX_MESSAGE_SIZE];
+    bool waitForReply;
+    char command[MAX_MESSAGE_SIZE];
+    while (1){
+        
 
-    int rc = send_message(fd, request);
+        printf("Storage Command: ");
+        if (fgets(command, sizeof(command), stdin) == NULL) {
+            
+            printf("Error Reading Command Input.\n");
+            continue;
+        } 
+        // remove trailing newline if present
+        size_t len = strlen(command);
+        if (len > 0 && command[len - 1] == '\n') {
+            command[len - 1] = '\0';
+        }
+
+        char args[3][256];
+        char* copy = strdup(command);
+        parseRequest(copy, args);
+        free(copy);
+
+        if(strcmp(args[0], "set") == 0){
+            strcpy(request, "set:");
+            strcat(request, args[1]);
+            strcat(request, ":");
+            strcat(request, args[2]);
+            waitForReply = false;
+        } else if (strcmp(args[0], "get") == 0){
+            strcpy(request, "get:");
+            strcat(request, args[1]);
+            waitForReply = true;
+        } else {
+            printf("Invalid Command Format, Use: set:key:value   or   get:key\n");
+            continue;
+        }
+
+        rc = send_message(fd, request);
         if (rc == -1){
-            perror("Failed To Return Response To Client.");
-            exit(EXIT_FAILURE);
-        }
-    
-    char* response = receive_message(fd);
-        if (response == NULL){
-            perror("Node Forward Met No Response.");
+            perror("Failed To Send Command To Storage Node\n");
             exit(EXIT_FAILURE);
         }
 
-    printf("%s\n", response);
+        if(!waitForReply){
+            continue;
+        }
+
+        char* response = receive_message(fd);
+        if (response == NULL){
+            perror("Failed to Recieve Response\n");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("%s\n", response);
+
+    }
+
+    
+    
 
     
 

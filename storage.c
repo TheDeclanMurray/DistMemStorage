@@ -8,9 +8,9 @@
 #include <unistd.h>
 #include <stdint.h>
 #include "message.h"
-#include "socket.h"
 #include "hashmap.h"
 #include "unistd.h"
+#include "socket.h"
 
 #define NUM_S_NODES 2
 
@@ -54,27 +54,33 @@ void *listenerThread(void *args)
         char *message = receive_message(client_socket_fd);
         if (message == NULL)
         {
-            perror("Failed to read message from client");
-            exit(EXIT_FAILURE);
+            perror("Client Disconected");
+            return NULL;
         }
-        else if (strcmp(message, "quit\n") == 0)
-        {
-            break;
-        }
+        printf("Command Received: %s\n", message);
 
         //
         char args[3][256];
-        parseRequest(message, args);
+        char* copy = strdup(message);
+        parseRequest(copy, args);
+        free(copy);
+
 
         // check if key is in our range if not send to next
         char *key = args[1];
         if (!isKeyInMyRange(key))
         {
+            printf("Key not in Node Range\n");
             // forward message to next storage node
             int rc = send_message(nextNodeFD, message);
             if (rc == -1){
                 perror("Node Forwarding Failed.");
                 exit(EXIT_FAILURE);
+            }
+
+            // only wait for and forward responses if a get request
+            if(strcmp(args[0], "get") != 0){
+                continue;
             }
 
             // wait for next sorage node to respond
@@ -91,49 +97,51 @@ void *listenerThread(void *args)
                 exit(EXIT_FAILURE);
             }
             continue;
-        }
+        }else{
+            printf("Key <%s> in Node Range\n", args[1]);
+            char *action = args[0];
 
-        char *action = args[0];
+            if (strcmp(action, "get") == 0)
+            {
+                // get
+                char *value = ht_get(key, &storage_table);
+                // TODO: handle if we dont have key
+                if(value == NULL){
+                    value = "Key Not Set.\n";
+                }
+                printf("Value: %s\n", value);
+                // send message back to requester
+                int rc = send_message(client_socket_fd, value);
+                if (rc == -1){
+                    perror("Failed To Return Response To Client.");
+                    exit(EXIT_FAILURE);
+                }
 
-        if (strcmp(action, "get") == 0)
-        {
-            // get
-            char *value = ht_get(key, &storage_table);
-            // TODO: handle if we dont have key
-            if(value == NULL){
-                value = "Key Not Set.\n";
             }
-            // send message back to requester
-            int rc = send_message(client_socket_fd, value);
-            if (rc == -1){
-                perror("Failed To Return Response To Client.");
-                exit(EXIT_FAILURE);
+            else if (strcmp(action, "set") == 0)
+            {
+                // set
+                char *value = args[2];
+                ht_set(key, value, &storage_table);
             }
+        }
 
-        }
-        else if (strcmp(action, "set") == 0)
-        {
-            // set
-            char *value = args[2];
-            ht_set(key, value, &storage_table);
-        }
+        
     }
     // close client socket
     close(client_socket_fd);
     return NULL;
 }
 
-void attachNewStorageNode(char *nodeHashId, char *nodeAddress);
 
 void *connectToStorageNode(void * args){
     
     unsigned short next_port = storageNodes[next_node];
     do
     {
+        sleep(3);
+        printf("Attempting Connecton\n");
         nextNodeFD = socket_connect("localhost", next_port);
-        printf("Attempted Connection.\n");
-        sleep(2);
-
     } while (nextNodeFD == -1);
     printf("Connection Established!\n");
     return NULL;
@@ -153,7 +161,6 @@ int main(int argc, char* argv[])
     storage_table.size = 2048;
     storage_table.count = 0;
 
-
     // Open a server socket
     unsigned short port = storageNodes[thisNodesID];
     int server_socket_fd = server_socket_open(&port);
@@ -162,6 +169,13 @@ int main(int argc, char* argv[])
         perror("Server socket was not opened");
         exit(EXIT_FAILURE);
     }
+
+    // Start listening for connections, with a maximum of one queued connection
+    if (listen(server_socket_fd, 1)) {
+        perror("listen failed");
+        exit(EXIT_FAILURE);
+    }
+
 
     // create thread to connect to prev node
     pthread_t NodeConnect;

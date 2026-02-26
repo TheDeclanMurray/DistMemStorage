@@ -1,15 +1,15 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include "socket.h"
 #include "message.h"
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
 #include <stdbool.h>
+#include "socket.h"
 
 // testing params
 #define DO_PRINTS false
-#define MAX_MESSAGE_LENGTH 124
+#define MAX_MESSAGE_SIZE 124
 #define KEY_LEN 8
 #define VAL_LEN 16
 #define NUM_TESTS 4000
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
     }
 
     // setup loop vars
-    char buf[MAX_MESSAGE_LENGTH];
+    char buf[MAX_MESSAGE_SIZE];
     kv_pair kvs[NUM_TESTS];
     int key_count = 0;
 
