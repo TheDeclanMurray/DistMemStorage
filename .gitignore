@@ -58,3 +58,4 @@ storage
 client
 test
 .vscode/
+.nfs*
